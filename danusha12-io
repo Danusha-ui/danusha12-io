@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizing Integration</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --accent: #0ea5e9;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            width: 100%;
+            max-width: 650px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        p {
+            color: var(--text-light);
+            font-size: 0.95rem;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .canvas-container {
+            width: 100%;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 600px;
+            height: auto;
+            aspect-ratio: 4 / 3;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .explanation {
+            background-color: #f1f5f9;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent);
+            text-align: left;
+        }
+
+        .explanation h3 {
+            margin: 0 0 6px 0;
+            font-size: 1.1rem;
+        }
+
+        .math-box {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #0f172a;
+            margin: 10px 0;
+            text-align: center;
+            background: #ffffff;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Visualizing Integration</h1>
+    <p>Integration finds the area under a curve. Watch how dividing the area into thin rectangles approximates the exact area perfectly as they get narrower!</p>
+    
+    <div class="canvas-container">
+        <canvas id="plotCanvas" width="600" height="450"></canvas>
+    </div>
+
+    <div class="controls">
+        <button id="playBtn">Animate Rectangles</button>
+    </div>
+
+    <div class="explanation">
+        <h3>What are we calculating?</h3>
+        <p>We are finding the area under the curve <strong>f(x) = x² - 4x + 3</strong>, bounded by the vertical lines <strong>x = 3</strong> and <strong>x = 5</strong>.</p>
+        <div class="math-box">
+            Area = ∫₃⁵ (x² - 4x + 3) dx = 20/3 ≈ 6.67 units²
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('plotCanvas');
+    const ctx = canvas.getContext('2d');
+    const playBtn = document.getElementById('playBtn');
+
+    // Graph Configuration
+    const xMin = 1, xMax = 6;
+    const yMin = -2, yMax = 10;
+    
+    // Integration Limits
+    const startX = 3;
+    const endX = 5;
+
+    // Animation state
+    let rectCount = 1;
+    let isAnimating = false;
+    let animationFrameId;
+
+    // Function f(x) = x^2 - 4x + 3
+    function f(x) {
+        return x * x - 4 * x + 3;
+    }
+
+    // Coordinate conversion: Math X to Canvas X
+    function toCanvasX(x) {
+        return ((x - xMin) / (xMax - xMin)) * canvas.width;
+    }
+
+    // Coordinate conversion: Math Y to Canvas Y (Canvas Y goes downwards)
+    function toCanvasY(y) {
+        return canvas.height - ((y - yMin) / (yMax - yMin)) * canvas.height;
+    }
+
+    // Main Draw Function
+    function draw(currentRects) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Draw Grid Lines & Axes
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1;
+        
+        // Vertical grid & X labels
+        for (let x = xMin; x <= xMax; x++) {
+            let cx = toCanvasX(x);
+            ctx.beginPath();
+            ctx.moveTo(cx, 0);
+            ctx.lineTo(cx, canvas.height);
+            ctx.stroke();
+            
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '12px sans-serif';
+            ctx.fillText(x, cx - 4, toCanvasY(0) + 15);
+        }
+
+        // Horizontal grid & Y labels
+        for (let y = yMin; y <= yMax; y += 2) {
+            let cy = toCanvasY(y);
+            ctx.beginPath();
+            ctx.moveTo(0, cy);
+            ctx.lineTo(canvas.width, cy);
+            ctx.stroke();
+            
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText(y, toCanvasX(0) + 8, cy + 4);
+        }
+
+        // X and Y Axis lines
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, toCanvasY(0)); ctx.lineTo(canvas.width, toCanvasY(0)); // X axis
+        ctx.moveTo(toCanvasX(0), 0); ctx.lineTo(toCanvasX(0), canvas.height); // Y axis
+        ctx.stroke();
+
+        // 2. Draw Exact Shaded Area (Background)
+        ctx.fillStyle = 'rgba(14, 165, 233, 0.15)'; // Light Sky Blue
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(startX), toCanvasY(0));
+        for (let x = startX; x <= endX; x += 0.05) {
+            ctx.lineTo(toCanvasX(x), toCanvasY(f(x)));
+        }
+        ctx.lineTo(toCanvasX(endX), toCanvasY(0));
+        ctx.closePath();
+        ctx.fill();
+
+        // 3. Draw Riemann Rectangles (Animation Layer)
+        if (currentRects > 1) {
+            const w = (endX - startX) / currentRects;
+            ctx.fillStyle = 'rgba(79, 70, 229, 0.45)'; // Semi-transparent Indigo
+            ctx.strokeStyle = 'rgba(79, 70, 229, 0.7)';
+            ctx.lineWidth = 1;
+
+            for (let i = 0; i < currentRects; i++) {
+                let xLeft = startX + i * w;
+                let xMid = xLeft + w / 2; // Midpoint Rule for better visual fitting
+                let yVal = f(xMid);
+
+                let rx = toCanvasX(xLeft);
+                let ry = toCanvasY(Math.max(0, yVal));
+                let rw = toCanvasX(startX + w) - toCanvasX(startX);
+                let rh = Math.abs(toCanvasY(yVal) - toCanvasY(0));
+
+                ctx.fillRect(rx, ry, rw, rh);
+                if (currentRects <= 50) { // Only draw borders if they aren't microscopically thin
+                    ctx.strokeRect(rx, ry, rw, rh);
+                }
+            }
+        }
+
+        // 4. Draw Boundary Lines (x = 3 and x = 5)
+        ctx.strokeStyle = '#ef4444'; // Red
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        
+        // Line x = 3
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(3), 0); ctx.lineTo(toCanvasX(3), canvas.height);
+        ctx.stroke();
+
+        // Line x = 5
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(5), 0); ctx.lineTo(toCanvasX(5), canvas.height);
+        ctx.stroke();
+        
+        ctx.setLineDash([]); // Reset dash style
+
+        // 5. Draw Curve f(x)
+        ctx.strokeStyle = '#10b981'; // Vivid Green
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        let started = false;
+        for (let x = xMin; x <= xMax; x += 0.05) {
+            let cx = toCanvasX(x);
+            let cy = toCanvasY(f(x));
+            if (!started) {
+                ctx.moveTo(cx, cy);
+                started = true;
+            } else {
+                ctx.lineTo(cx, cy);
+            }
+        }
+        ctx.stroke();
+
+        // Labels for lines
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('x = 3', toCanvasX(3) - 40, 30);
+        ctx.fillText('x = 5', toCanvasX(5) + 10, 30);
+
+        // Label for function
+        ctx.fillStyle = '#10b981';
+        ctx.fillText('f(x) = x² - 4x + 3', toCanvasX(1.5), toCanvasY(f(1.5)) - 15);
+        
+        // Dynamic Counter text
+        ctx.fillStyle = 'var(--text)';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(`Rectangles: ${Math.floor(currentRects)}`, 20, 30);
+    }
+
+    // Animation Loop
+    function animate() {
+        if (rectCount < 100) {
+            // Speed scaling up smoothly
+            rectCount += (rectCount < 20) ? 0.3 : 1.5; 
+            draw(rectCount);
+            animationFrameId = requestAnimationFrame(animate);
+        } else {
+            draw(100); // Snap cleanly to final value
+            isAnimating = false;
+            playBtn.innerText = "Restart Animation";
+        }
+    }
+
+    // Button Event Listener
+    playBtn.addEventListener('click', () => {
+        if (isAnimating) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        rectCount = 1;
+        isAnimating = true;
+        playBtn.innerText = "Animating...";
+        animate();
+    });
+
+    // Initial Static Render
+    draw(1);
+</script>
+
+</body>
+</html>
